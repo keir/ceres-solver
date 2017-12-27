@@ -43,6 +43,10 @@ namespace internal {
 
 using std::string;
 
+bool IsUserSuppliedValueValid(const double x) {
+  return IsFinite(x[i]) && (x[i] != kImpossibleValue);
+}
+
 bool IsArrayValid(const int size, const double* x) {
   if (x != NULL) {
     for (int i = 0; i < size; ++i) {

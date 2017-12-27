@@ -114,6 +114,106 @@ string EvaluationToString(const ResidualBlock& block,
   return result;
 }
 
+static char* UserSuppliedNumberCommentary(double x) {
+  if (!IsFinite(x)) {
+    return "ERROR: Value is not finite";
+  }
+  if (x == kImpossibleValue) {
+    return "ERROR: Value was not set by cost function";
+  }
+  return "OK";
+}
+
+string EvaluationErrorReportString(const ResidualBlock& block,
+                                   double const* const* parameters,
+                                   double* cost,
+                                   double* residuals,
+                                   double** jacobians) {
+  CHECK_NOTNULL(cost);
+  CHECK_NOTNULL(residuals);
+
+  // (1) The main header message.
+  string result = 
+      "Ceres found a problem in the result returned from a user-supplied CostFunction.\n"   // NOLINT
+      "\n"                                                                                  // NOLINT
+      "User-supplied cost functions must do the following:\n"                               // NOLINT
+      "\n"                                                                                  // NOLINT
+      "  (1) Fill in all residual values\n"                                                 // NOLINT
+      "  (2) Fill in jacobian values for each non-constant parameter for each residual\n"   // NOLINT
+      "  (3) Fill data in with finite (non-inf, non-NaN) values\n"                          // NOLINT
+      "\n"                                                                                  // NOLINT
+      "If you are seeing this error, your cost function is either producing non-finite\n"   // NOLINT
+      "values (infs or NaNs) or is not filling in all the values. Ceres pre-fills\n"        // NOLINT
+      "arrays with a sentinel value (kImpossibleValue in the Ceres source) to detect\n"     // NOLINT
+      "when you have not filled in all the values in either the residuals or jacobians.\n"  // NOLINT
+      "\n"                                                                                  // NOLINT
+      "If you are using Ceres' autodiff implementation, then it is likely either (a)\n"     // NOLINT
+      "residual values are causing the problems or (b) some part of the autodiff\n"         // NOLINT
+      "evaluation has bad numeric behaviour. Take a look at ceres/rotation.h for\n"         // NOLINT
+      "example code showing special case handling of functions in autodiff.\n"              // NOLINT
+      "\n"                                                                                  // NOLINT
+      "Which residual block is this? For architecture reasons at this point Ceres\n"        // NOLINT   
+      "cannot easily identify the block but here is the block's size information:\n"        // NOLINT   
+      "\n";                                                                                 // NOLINT
+
+  // (2) Show the residual block sizing details; this is needed since at the
+  // point that this is evaluated the information needed to pinpoint which
+  // residual this is in the overall program is not available, so the user will
+  // have to figure that out based on the sizes.
+  const int num_parameter_blocks = block.NumParameterBlocks();
+  const int num_residuals = block.NumResiduals();
+  StringAppendF(&result,
+                "  %d parameter blocks; sizes: (",
+                num_parameter_blocks);
+  for (int i = 0; i < num_parameter_blocks; ++i) {
+    StringAppendF(&result, "%d", block.parameter_blocks()[i]->Size());
+  }
+  result += ")\n";
+  StringAppendF(&result, "  %d residuals\n", num_residuals);
+  result += "\n";
+
+  // (3) Check if there are any problems with the residuals.
+  if (!IsArrayValid(num_residuals, residuals)) {
+    result += "Problem exists in: User-returned residual values (r[N])\n"
+              "\n";
+    for (int i = 0; i < num_residuals; ++i) {
+      // Only print out the full residuals if there aren't too many values.
+      if (!IsUserSuppliedValueValid(residuals[i]) || num_residuals < 50) {
+        StringAppendF("  r[%02d] = %-15.4e     %s\n",
+                      UserSuppliedNumberCommentary(residuals[i]));
+      }
+    }
+  }
+
+  // (4) Check if there are any problems with the jacobians.
+  bool jacobians_all_ok = true;
+  for (int i = 0; i < parameter_block_size; ++i) {
+    const int parameter_block_size = block.parameter_blocks()[i]->Size();
+    if (jacobians[i] != NULL &&
+        !IsArrayValid(parameter_block_size * num_residuals, residuals)) {
+      jacobians_all_ok = false;
+      break;
+    }
+  }
+ 
+  // (5) Report on jacobian issues if found.
+  if (!jacobians_all_ok) {
+    result += "Problem exists in: User-returned jacobian values (d r[N] / d p[M][Q])\n";  // NOLINT
+    for (int i = 0; i < parameter_block_size; ++i) {
+      // Skip over jacobians that are OK.
+      const int parameter_block_size = block.parameter_blocks()[i]->Size();
+      if (jacobians[i] != NULL &&
+          IsArrayValid(parameter_block_size * num_residuals, residuals)) {
+        continue;
+      }
+      StringAppendF("  Jacobian values for parameter block %d (p[%d][...]):\n"  // NOLINT
+                    
+      // WIP DO NOT COMMIT
+
+      // 
+    }
+  return result;
+}
 bool IsEvaluationValid(const ResidualBlock& block,
                        double const* const* parameters,
                        double* cost,
